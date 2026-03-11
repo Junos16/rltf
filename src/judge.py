@@ -16,54 +16,51 @@ class RLTFJudge:
         self.model_name = model_name
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-    async def get_critique(self, prompt: str, generated_answer: str) -> str:
+    async def get_critique(self, prompt: str, generated_solution: str) -> str:
         try:
-            judge_prompt = f"""
-            Please evaluate this student's attempt.
-            Problem: {prompt}
-            Student's Answer: {generated_answer}
+            judge_prompt = f"""You are an expert grader for math/logic problems.
+                Problem: {prompt}
+                Student Solution: {generated_solution}
+                Your task:
+                • Analyze the student solution step by step.
+                • Focus on correctness and logical consistency.
+                • Identify potential mistake(s), if any.
+                • Provide concrete, actionable hints to improve the solution.
+                • Keep the Critique section under 200 words.
+                Format your response exactly as:
+                Thinking: [Your step-by-step analysis]
+                Critique: [Your final critique in under 200 words, ending with either “Your previous attempt was
+                correct.” or “Your previous attempt was incorrect.”]
             """
 
             response = await self.client.aio.models.generate_content(
                 model=self.model_name,
-                config=types.GenerateContentConfig(
-                    system_instruction="""You are a strict but helpful math/logic teacher.You are an expert mathematical and logical evaluator.
-                        Your job is to read a problem and a student's attempted solution.
-                        If the student's final answer is correct and their reasoning is sound, output EXACTLY:
-                        "Your previous answer is correct."
-                        If the student's answer is incorrect or their reasoning is flawed, output a concise critique.
-                        CRITICAL RULES:
-                        1. DO NOT provide the final correct answer.
-                        2. DO NOT rewrite the entire solution for them.
-                        3. Identify the specific step where they made a mistake (e.g., arithmetic error, logical fallacy) and state what was wrong with that specific step.
-                        4. Keep your critique under 3 sentences.
-                    """,
-                ),
                 contents=judge_prompt,
             )
 
             return response.text
 
-        except:
+        except Exception as e:
             print(
+                e,
                 f"Error: Failed to get critique from judge for prompt: {prompt}"
             )            
             return ""
 
-    async def batch_get_critiques(self, prompts: list[str], generated_answers: list[str]) -> list[str]:
+    async def batch_get_critiques(self, prompts: list[str], solutions: list[str]) -> list[str]:
         critiques = await asyncio.gather(
-            list(map(self.get_critique, prompts, generated_answers))
+            list(map(self.get_critique, prompts, solutions))
         )
         
         return critiques
 
 if __name__ == "__main__":
-    async def test_judge(question: str, answer: str):
+    async def test_judge(question: str, solution: str):
         judge = RLTFJudge()
         print("Testing judge...")
-        res = await judge.get_critique(question, answer)
+        res = await judge.get_critique(question, solution)
         print(f"Critique: {res}")
 
     question = input("Enter the question:")
-    answer = input("Enter the answer:")
-    asyncio.run(test_judge(question, answer))
+    solution = input("Enter the solution:")
+    asyncio.run(test_judge(question, solution))
