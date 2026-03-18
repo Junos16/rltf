@@ -49,10 +49,9 @@ class RLTFJudge:
 
     async def batch_get_critiques(self, prompts: list[str], solutions: list[str]) -> list[str]:
         critiques = await asyncio.gather(
-            list(map(self.get_critique, prompts, solutions))
+            *[self.get_critique(p, s) for p, s in zip(prompts, solutions)]
         )
-        
-        return critiques
+        return list(critiques)
 
 if __name__ == "__main__":
     async def test_judge(question: str, solution: str):
