@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import subprocess
 from src.config import ExperimentConfig, Hyperparameters
 from src.trainer import Trainer
 from src.inference import InferenceEngine
@@ -39,8 +40,18 @@ def main():
                              help="Evaluation samples drawn from the test environment.")
     eval_parser.add_argument("--config_file", type=str, default="hyperparams.json")
     
+    # --- NB Subparser ---
+    nb_parser = subparsers.add_parser("nb", help="Launch a Jupyter server")
+    nb_parser.add_argument("--notebook", type=str, default="./notebooks", help="Path to notebook or directory to open")
+    nb_parser.add_argument("--port", type=int, default=8888, help="Port to run the Jupyter server on.")
+    
     args = parser.parse_args()
     
+    if args.action == "nb":
+        os.makedirs(args.notebook, exist_ok=True) if args.notebook == "./notebooks" else None
+        subprocess.run(["jupyter", "notebook", args.notebook, "--no-browser", "--port", str(args.port), "--ip", "0.0.0.0"])
+        return
+        
     if not os.path.exists(args.config_file):
         raise FileNotFoundError(f"Configuration file not found: {args.config_file}. Please create one with hyperparameters.")
     
