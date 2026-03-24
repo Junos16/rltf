@@ -17,6 +17,11 @@ def clipped_surrogate_loss(logprobs, old_logprobs, advantages, mask, clip_ratio:
     loss = (token_losses * mask).sum() / (mask.sum() + 1e-8)
     return loss
 
+def awr_loss(logprobs, advantages, mask) -> torch.Tensor:
+    # Advantage-weighted regression loss (no importance weighting)
+    loss = -(logprobs * advantages * mask).sum() / (mask.sum() + 1e-8)
+    return loss
+
 def get_env(env_name: str, split: str = "train"):
     # Get the environment
     if env_name == "dummy":
@@ -122,6 +127,8 @@ class Trainer:
                     loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1), reduction='none')
                     loss = loss.view(shift_labels.size())
                     loss = (loss * shift_mask).sum() / (shift_mask.sum() + 1e-8)
+                elif self.config.algo == 'rltf_sd':
+                    loss = awr_loss(action_logprobs, adv_tensor, shift_mask)
                 else:
                     loss = clipped_surrogate_loss(action_logprobs, shift_old_logprobs, adv_tensor, shift_mask, self.config.hyperparameters.clip_ratio)
                 
