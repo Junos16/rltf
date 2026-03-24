@@ -32,6 +32,8 @@ class InferenceEngine:
                 print(f"Loaded adapter: {adapter_path}")
             else:
                 print("No adapter found in path")
+        else:
+            print("Running infernce on base unaligned model")
 
     def _generate(self, prompts: list):
         inputs = self.tokenizer(prompts, return_tensors="pt", padding=True).to(self.model.device)
@@ -57,11 +59,11 @@ class InferenceEngine:
     def evaluate_env(self, num_samples: int = 10):
         print(f"Env: {self.config.env}")
         if self.config.env == "dummy":
-            env = DummyEnv()
+            env = DummyEnv(split="test")
         elif self.config.env == "gsm8k":
-            env = GSM8KEnv()
+            env = GSM8KEnv(split="test")
         elif self.config.env == "math500":
-            env = MATH500Env()
+            env = MATH500Env(split="test")
         else:
             raise ValueError(f"Unknown env: {self.config.env}")
             
