@@ -35,4 +35,5 @@ class ExperimentConfig:
     algo: str
     log_dir: str
     hyperparameters: Hyperparameters
+    use_correctness_only: bool = False
 

@@ -74,7 +74,10 @@ class JudgeModel:
         self.tokenizer = AutoTokenizer.from_pretrained(judge_model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token        
 
-    def get_critique(self, prompt: str, initial_answer: str) -> str:
+    def get_critique(self, prompt: str, initial_answer: str, r0: float = None, correctness_only: bool = False) -> str:
+        if correctness_only and r0 is not None:
+            return "Your previous answer was correct." if r0 > 0.0 else "Your previous answer was incorrect."
+            
         # Returns the critique string
         query = f"""You are given a question and your previous attempt below. Your task is provide a critique of the attempt.\n\n[Prompt]\n{prompt}\n[Attempt]\n{initial_answer}\nCritique: """
         outputs = self.llm.generate([query], self.sampling_params)

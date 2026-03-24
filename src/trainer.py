@@ -69,7 +69,7 @@ class Trainer:
                     r0 = self.env.evaluate(y0, truth)
                     y0_rewards.append(r0)
                     
-                    c0 = self.judge.get_critique(prompt, y0)
+                    c0 = self.judge.get_critique(prompt, y0, r0=r0, correctness_only=self.config.use_correctness_only)
                     
                     y1_list, logprobs_list = self.policy.generate([prompt + y0 + c0])
                     y1 = y1_list[0]
