@@ -113,12 +113,14 @@ class Trainer:
                 adv_mask = data["adv_mask"].unsqueeze(0).to(self.device)
                 
                 # Compute true old_logprobs with frozen weights (no_grad)
-                with torch.no_grad():
-                    old_logits = self.policy.forward_train(input_ids, attention_mask)
-                    old_shift_logits = old_logits[..., :-1, :].contiguous()
-                    old_shift_labels = input_ids[..., 1:].contiguous()
-                    old_logprobs = F.log_softmax(old_shift_logits, dim=-1)
-                    old_action_logprobs = torch.gather(old_logprobs, dim=-1, index=old_shift_labels.unsqueeze(-1)).squeeze(-1)
+                old_action_logprobs = None
+                if self.config.algo in ('grpo', 'rltf_fm'):
+                    with torch.no_grad():
+                        old_logits = self.policy.forward_train(input_ids, attention_mask)
+                        old_shift_logits = old_logits[..., :-1, :].contiguous()
+                        old_shift_labels = input_ids[..., 1:].contiguous()
+                        old_logprobs = F.log_softmax(old_shift_logits, dim=-1)
+                        old_action_logprobs = torch.gather(old_logprobs, dim=-1, index=old_shift_labels.unsqueeze(-1)).squeeze(-1)
                 
                 logits = self.policy.forward_train(input_ids, attention_mask)
                 
