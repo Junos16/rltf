@@ -1,6 +1,8 @@
-# RLTF Inference & Alignment Engine
+# Reinforcement Learning via Text Feedback
 
 My implementation of the paper: [Expanding the Capabilities of Reinforcement Learning via Text Feedback](https://arxiv.org/abs/2602.02482)
+
+Authors: Yuda Song, Lili Chen, Fahim Tajwar, Rémi Munos, Deepak Pathak, J. Andrew Bagnell, Aarti Singh, Andrea Zanette
 
 ## CLI Usage
 
