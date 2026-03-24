@@ -42,13 +42,21 @@ class TrajectoryGroup:
     trajectories: List[Trajectory]
     y0_rewards: List[float] = field(default_factory=list)
 
-    def get_advantages(self, algo: str = "grpo") -> List[float]:
-        # Calculate advantages using algo-dependent baseline
+    def get_advantages(self, algo: str = "grpo") -> List[Dict[str, float]]:        # Calculate advantages using algo-dependent baseline
         # RLTF-SD/FM: first-turn baseline to avoid gradient-signal collapse (Section 3.1)
         # GRPO: second-turn baseline (standard multi-turn GRPO)
         y1_rewards = [t.total_reward for t in self.trajectories]
-        if algo in ('rltf_sd', 'rltf_fm') and self.y0_rewards:
-            baseline = sum(self.y0_rewards) / len(self.y0_rewards)
-        else:
-            baseline = sum(y1_rewards) / len(y1_rewards)
-        return [r - baseline for r in y1_rewards]
+        y0_rewards = self.y0_rewards
+        returns = [r0 + r1 for r0, r1 in zip(y0_rewards, y1_rewards)]
+        
+        b_0 = sum(y0_rewards) / len(y0_rewards) if y0_rewards else 0.0
+        b_1 = sum(y1_rewards) / len(y1_rewards) if y1_rewards else 0.0
+        b_R = sum(returns) / len(returns) if returns else 0.0
+        
+        advs = []
+        for r1, ret in zip(y1_rewards, returns):
+            if algo in ('rltf_sd', 'rltf_fm'):
+                advs.append({"adv_0": ret - b_R, "adv_1": r1 - b_0})
+            else:
+                advs.append({"adv_0": ret - b_R, "adv_1": r1 - b_1})
+        return advs

@@ -8,18 +8,18 @@ from .env import DummyEnv, GSM8KEnv, MATH500Env
 from .datatypes import Transition, Trajectory, TrajectoryGroup
 from .data_processing import compute_advantages, trajectory_to_data, apply_distillation_mask, create_feedback_modeling_target
 
-def clipped_surrogate_loss(logprobs, old_logprobs, advantages, mask, clip_ratio: float) -> torch.Tensor:
+def clipped_surrogate_loss(logprobs, old_logprobs, adv_mask, mask, clip_ratio: float) -> torch.Tensor:
     # Calculate clipped surrogate loss
     ratio = torch.exp(logprobs - old_logprobs)
-    surrogate1 = ratio * advantages
-    surrogate2 = torch.clamp(ratio, 1-clip_ratio, 1+clip_ratio) * advantages
+    surrogate1 = ratio * adv_mask
+    surrogate2 = torch.clamp(ratio, 1-clip_ratio, 1+clip_ratio) * adv_mask
     token_losses = -torch.min(surrogate1, surrogate2)
     loss = (token_losses * mask).sum() / (mask.sum() + 1e-8)
     return loss
 
-def awr_loss(logprobs, advantages, mask) -> torch.Tensor:
+def awr_loss(logprobs, adv_mask, mask) -> torch.Tensor:
     # Advantage-weighted regression loss (no importance weighting)
-    loss = -(logprobs * advantages * mask).sum() / (mask.sum() + 1e-8)
+    loss = -(logprobs * adv_mask * mask).sum() / (mask.sum() + 1e-8)
     return loss
 
 def get_env(env_name: str, split: str = "train"):
@@ -99,18 +99,18 @@ class Trainer:
             num_trajs = len(flat_trajectories)
             total_loss_val = 0.0
             
-            for traj, adv in zip(flat_trajectories, advantages):
+            for traj, adv_dict in zip(flat_trajectories, advantages):
                 if self.config.algo == 'rltf_sd':
-                    data = apply_distillation_mask(traj, adv, self.policy.tokenizer)
-                elif self.config.algo == 'grpo':
-                    data = trajectory_to_data(traj, adv, self.policy.tokenizer, include_y0=True)
+                    data = apply_distillation_mask(traj, adv_dict, self.policy.tokenizer)
+                elif self.config.algo in ('grpo', 'rltf_fm'):
+                    data = trajectory_to_data(traj, adv_dict, self.policy.tokenizer, include_y0=True)
                 else:
-                    data = trajectory_to_data(traj, adv, self.policy.tokenizer)
+                    data = trajectory_to_data(traj, adv_dict, self.policy.tokenizer)                
                 
                 input_ids = data["input_ids"].unsqueeze(0).to(self.device)
                 attention_mask = data["attention_mask"].unsqueeze(0).to(self.device)
                 mask = data["loss_mask"].unsqueeze(0).to(self.device)
-                adv_tensor = data["advantages"].unsqueeze(0).to(self.device)
+                adv_mask = data["adv_mask"].unsqueeze(0).to(self.device)
                 
                 # Compute true old_logprobs with frozen weights (no_grad)
                 with torch.no_grad():
@@ -125,16 +125,17 @@ class Trainer:
                 shift_logits = logits[..., :-1, :].contiguous()
                 shift_labels = input_ids[..., 1:].contiguous()
                 shift_mask = mask[..., 1:].contiguous()
+                shift_adv_mask = adv_mask[..., 1:].contiguous()
                 
                 logprobs = F.log_softmax(shift_logits, dim=-1)
                 action_logprobs = torch.gather(logprobs, dim=-1, index=shift_labels.unsqueeze(-1)).squeeze(-1)
                 
                 if self.config.algo == 'rltf_sd':
-                    loss = awr_loss(action_logprobs, adv_tensor, shift_mask)
+                    loss = awr_loss(action_logprobs, shift_adv_mask, shift_mask)
                 else:
-                    loss = clipped_surrogate_loss(action_logprobs, old_action_logprobs, adv_tensor, shift_mask, self.config.hyperparameters.clip_ratio)
+                    loss = clipped_surrogate_loss(action_logprobs, old_action_logprobs, shift_adv_mask, shift_mask, self.config.hyperparameters.clip_ratio)
 
-                # RLTF-FM: add auxiliary SFT loss on critique prediction (Eq.10)
+                # RLTF-FM: add auxiliary SFT loss on critique prediction
                 if self.config.algo == 'rltf_fm':
                     fm_data = create_feedback_modeling_target(traj, self.policy.tokenizer)
                     fm_input_ids = fm_data["input_ids"].unsqueeze(0).to(self.device)

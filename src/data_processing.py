@@ -1,14 +1,14 @@
 import torch
 from typing import List, Dict, Any
 
-def compute_advantages(trajectory_groups, algo: str = "grpo") -> List[torch.Tensor]:
+def compute_advantages(trajectory_groups, algo: str = "grpo") -> List[Dict[str, float]]:
     # Calculate advantages of the trajectories
     advantages = []
     for group in trajectory_groups:
         advantages.extend(group.get_advantages(algo))
     return advantages
 
-def trajectory_to_data(trajectory, advantage: float, tokenizer, max_length: int = 1024, include_y0: bool = False) -> Dict[str, torch.Tensor]:
+def trajectory_to_data(trajectory, adv_dict: Dict[str, float], tokenizer, max_length: int = 1024, include_y0: bool = False) -> Dict[str, torch.Tensor]:
     # Convert trajectory to data for training
 
     prompt_text = trajectory.get_prompt()
@@ -24,6 +24,7 @@ def trajectory_to_data(trajectory, advantage: float, tokenizer, max_length: int 
     input_ids = encoded["input_ids"].squeeze(0)
     attention_mask = encoded["attention_mask"].squeeze(0)
     loss_mask = torch.zeros_like(input_ids, dtype=torch.float32)
+    adv_mask = torch.zeros_like(input_ids, dtype=torch.float32)
     
     sequence_length = attention_mask.sum().item()
     
@@ -37,24 +38,27 @@ def trajectory_to_data(trajectory, advantage: float, tokenizer, max_length: int 
         c0_end = y0_end + len(c0_ids)
         if y0_end > prompt_length:
             loss_mask[prompt_length:y0_end] = 1.0
+            adv_mask[prompt_length:y0_end] = adv_dict["adv_0"]
         if sequence_length > c0_end:
             loss_mask[c0_end:sequence_length] = 1.0
+            adv_mask[c0_end:sequence_length] = adv_dict["adv_1"]
     else:
         # Default: train only on y1 (mask prompt+y0+c0)
         context_ids = tokenizer(context_text, add_special_tokens=False)["input_ids"]
         context_length = len(context_ids)
         if sequence_length > context_length:
             loss_mask[context_length:sequence_length] = 1.0
+            adv_mask[context_length:sequence_length] = adv_dict["adv_1"]
     
     return {
         "input_ids": input_ids,
         "attention_mask": attention_mask,
         "loss_mask": loss_mask,
-        "advantages": torch.tensor([advantage], dtype=torch.float32),
+        "adv_mask": adv_mask,
         "old_logprobs": trajectory.get_action_logprobs()
     }
 
-def apply_distillation_mask(trajectory, advantage: float, tokenizer, max_length: int = 1024) -> Dict[str, torch.Tensor]:
+def apply_distillation_mask(trajectory, adv_dict: Dict[str, float], tokenizer, max_length: int = 1024) -> Dict[str, torch.Tensor]:
     # Apply distillation mask to the trajectory
 
     context_text = trajectory.get_prompt()
@@ -66,18 +70,20 @@ def apply_distillation_mask(trajectory, advantage: float, tokenizer, max_length:
     attention_mask = encoded["attention_mask"].squeeze(0)
     
     loss_mask = torch.zeros_like(input_ids, dtype=torch.float32)
+    adv_mask = torch.zeros_like(input_ids, dtype=torch.float32)
     context_ids = tokenizer(context_text, add_special_tokens=False)["input_ids"]
     context_length = len(context_ids)
     sequence_length = attention_mask.sum().item()
     
     if sequence_length > context_length:
         loss_mask[context_length:sequence_length] = 1.0
+        adv_mask[context_length:sequence_length] = adv_dict["adv_1"]
         
     return {
         "input_ids": input_ids,
         "attention_mask": attention_mask,
         "loss_mask": loss_mask,
-        "advantages": torch.tensor([advantage], dtype=torch.float32),
+        "adv_mask": adv_mask,
         "old_logprobs": trajectory.get_action_logprobs()
     }
 
@@ -107,6 +113,4 @@ def create_feedback_modeling_target(trajectory, tokenizer, max_length: int = 102
         "input_ids": input_ids,
         "attention_mask": attention_mask,
         "loss_mask": loss_mask,
-        "advantages": torch.tensor([0.0], dtype=torch.float32), 
-        "old_logprobs": torch.zeros_like(input_ids, dtype=torch.float32)
     }
