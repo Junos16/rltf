@@ -16,6 +16,7 @@ class Hyperparameters:
     temperature: float = 1.0
     top_p: float = 0.9
     gpu_memory_utilization: float = 0.3
+    sft_coef: float = 0.1
 
     def __post_init__(self):
         if self.lora_target_modules is None:
@@ -36,5 +37,4 @@ class ExperimentConfig:
     log_dir: str
     hyperparameters: Hyperparameters
     use_correctness_only: bool = False
-    sft_coef: float = 0.1
 

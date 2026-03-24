@@ -145,7 +145,7 @@ class Trainer:
                     fm_loss = fm_loss.view(fm_shift_labels.size())
                     fm_loss = (fm_loss * fm_shift_mask).sum() / (fm_shift_mask.sum() + 1e-8)
                     
-                    loss = loss + self.config.sft_coef * fm_loss
+                    loss = loss + self.config.hyperparameters.sft_coef * fm_loss
                 
                 # Gradient accumulation: backward per trajectory, divide by batch size
                 (loss / num_trajs).backward()
