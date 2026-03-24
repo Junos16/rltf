@@ -1,11 +1,11 @@
 import torch
 from typing import List, Dict, Any
 
-def compute_advantages(trajectory_groups) -> List[torch.Tensor]:
+def compute_advantages(trajectory_groups, algo: str = "grpo") -> List[torch.Tensor]:
     # Calculate advantages of the trajectories
     advantages = []
     for group in trajectory_groups:
-        advantages.extend(group.advantages)
+        advantages.extend(group.get_advantages(algo))
     return advantages
 
 def trajectory_to_data(trajectory, advantage: float, tokenizer, max_length: int = 1024) -> Dict[str, torch.Tensor]:

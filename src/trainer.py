@@ -90,7 +90,7 @@ class Trainer:
                 group = TrajectoryGroup(prompt=prompt, trajectories=trajectories, y0_rewards=y0_rewards)
                 all_trajectory_groups.append(group)
             
-            advantages = compute_advantages(all_trajectory_groups)
+            advantages = compute_advantages(all_trajectory_groups, algo=self.config.algo)
             
             total_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
             self.policy.model.train() 

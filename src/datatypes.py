@@ -42,12 +42,13 @@ class TrajectoryGroup:
     trajectories: List[Trajectory]
     y0_rewards: List[float] = field(default_factory=list)
 
-    @property
-    def advantages(self) -> List[float]:
-        # Calculate advantages using the first-turn mean reward as baseline
-        if self.y0_rewards:
+    def get_advantages(self, algo: str = "grpo") -> List[float]:
+        # Calculate advantages using algo-dependent baseline
+        # RLTF-SD/FM: first-turn baseline to avoid gradient-signal collapse (Section 3.1)
+        # GRPO: second-turn baseline (standard multi-turn GRPO)
+        y1_rewards = [t.total_reward for t in self.trajectories]
+        if algo in ('rltf_sd', 'rltf_fm') and self.y0_rewards:
             baseline = sum(self.y0_rewards) / len(self.y0_rewards)
         else:
-            y1_rewards = [t.total_reward for t in self.trajectories]
             baseline = sum(y1_rewards) / len(y1_rewards)
-        return [t.total_reward - baseline for t in self.trajectories]
+        return [r - baseline for r in y1_rewards]
