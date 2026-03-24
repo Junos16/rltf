@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
 import torch
 
@@ -15,7 +15,11 @@ class Trajectory:
 
     @property
     def total_reward(self) -> float:
-        return sum(t.reward for t in self.transitions)
+        return sum(t.reward for t in self.transitions if t.reward is not None)
+    
+    @property
+    def y0_reward(self) -> float:
+        return self.transitions[0].reward if self.transitions[0].reward is not None else 0.0
     
     def get_y0(self) -> str:
         return self.transitions[0].action
@@ -36,10 +40,14 @@ class Trajectory:
 class TrajectoryGroup:
     prompt: str
     trajectories: List[Trajectory]
+    y0_rewards: List[float] = field(default_factory=list)
 
     @property
     def advantages(self) -> List[float]:
-        rewards = [t.total_reward for t in self.trajectories]
-        mean = torch.mean(rewards)
-        std = torch.std(rewards)
-        return [(reward - mean) / (std + 1e-4) for reward in rewards]
+        # Calculate advantages using the first-turn mean reward as baseline
+        if self.y0_rewards:
+            baseline = sum(self.y0_rewards) / len(self.y0_rewards)
+        else:
+            y1_rewards = [t.total_reward for t in self.trajectories]
+            baseline = sum(y1_rewards) / len(y1_rewards)
+        return [t.total_reward - baseline for t in self.trajectories]
