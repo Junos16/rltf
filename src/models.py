@@ -3,31 +3,29 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import get_peft_model, LoraConfig
 from vllm import LLM, SamplingParams
 from typing import List, Tuple
+from .config import Hyperparameters
 
 class PolicyModel:
-    def __init__(self, model_name: str, lora_rank: int, max_tokens: int):
+    def __init__(self, model_name: str, hyperparams: Hyperparameters):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
         self.model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16, device_map="cuda")
-        self.peft_config = LoraConfig(r=lora_rank, target_modules=["q_proj", "v_proj"])
+        self.peft_config = LoraConfig(r=hyperparams.lora_rank, target_modules=hyperparams.lora_target_modules)
         self.model = get_peft_model(self.model, self.peft_config)
         self.model.config.use_cache = False
         self.model.to(dtype=torch.bfloat16)
         self.llm = LLM(
             model=model_name,
-            tokenizer=self.tokenizer,
             tensor_parallel_size=1,
             dtype="bfloat16",
-            max_num_seqs=1,
-            max_num_tokens=2048,
-            disable_log_requests=True,
-            disable_log_stats=True,
-            gpu_memory_utilization=0.3,
+            max_model_len=hyperparams.max_tokens * 2,
+            gpu_memory_utilization=hyperparams.gpu_memory_utilization,
+            enforce_eager=True,
         )
         self.sampling_params = SamplingParams(
-            temperature=1.0,
-            top_p=0.9,
-            max_tokens=max_tokens,
+            temperature=hyperparams.temperature,
+            top_p=hyperparams.top_p,
+            max_tokens=hyperparams.max_tokens,
             ignore_eos=True,
             logprobs=1,
         )        
@@ -45,21 +43,19 @@ class PolicyModel:
         return outputs.logits
 
 class JudgeModel:
-    def __init__(self, judge_model_name: str, max_tokens: int):
+    def __init__(self, judge_model_name: str, hyperparams: Hyperparameters):
         self.llm = LLM(
             model=judge_model_name, 
             tensor_parallel_size=1, 
             dtype="bfloat16", 
-            max_num_seqs=1, 
-            max_num_tokens=max_tokens, 
-            disable_log_requests=True, 
-            disable_log_stats=True,
-            gpu_memory_utilization=0.3,
+            max_model_len=hyperparams.max_tokens * 2, 
+            gpu_memory_utilization=hyperparams.gpu_memory_utilization,
+            enforce_eager=True,
         )
         self.sampling_params = SamplingParams(
-            temperature=1.0,
-            top_p=0.9,
-            max_tokens=max_tokens,
+            temperature=hyperparams.temperature,
+            top_p=hyperparams.top_p,
+            max_tokens=hyperparams.max_tokens,
             ignore_eos=True,
         )
         self.tokenizer = AutoTokenizer.from_pretrained(judge_model_name)

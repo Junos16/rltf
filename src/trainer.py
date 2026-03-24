@@ -7,7 +7,7 @@ from .env import DummyEnv, GSM8KEnv, MATH500Env
 from .datatypes import Transition, Trajectory, TrajectoryGroup
 from .data_processing import compute_advantages, trajectory_to_data, apply_distillation_mask, create_feedback_modeling_target
 
-def clipped_surrogate_loss(logprobs, old_logprobs, advantages, mask, clip_ratio=0.2) -> torch.Tensor:
+def clipped_surrogate_loss(logprobs, old_logprobs, advantages, mask, clip_ratio: float) -> torch.Tensor:
     # Calculate clipped surrogate loss
     ratio = torch.exp(logprobs - old_logprobs)
     surrogate1 = ratio * advantages
@@ -36,19 +36,19 @@ class Trainer:
         self.env = get_env(self.config.env)
         
         print("Initializing Models...")
-        self.policy = PolicyModel(config.model_name, lora_rank=config.lora_rank, max_tokens=512)
+        self.policy = PolicyModel(config.model_name, hyperparams=config.hyperparameters)
         
         if config.algo != "rltf_fm":
-            self.judge = JudgeModel(config.judge_model, max_tokens=512)
+            self.judge = JudgeModel(config.judge_model, hyperparams=config.hyperparameters)
             
-        self.optimizer = AdamW(self.policy.model.parameters(), lr=self.config.learning_rate)
+        self.optimizer = AdamW(self.policy.model.parameters(), lr=self.config.hyperparameters.learning_rate)
         
     def train(self):
         # Train the model
-        for iteration in range(self.config.num_iterations):
+        for iteration in range(self.config.hyperparameters.num_iterations):
             print(f"--- Iteration {iteration} ---")
             
-            prompt_dicts = self.env.generate_prompts(batch_size=self.config.vllm_batch_size)
+            prompt_dicts = self.env.generate_prompts(batch_size=self.config.hyperparameters.vllm_batch_size)
             
             all_trajectory_groups = []
             
@@ -59,7 +59,7 @@ class Trainer:
                 trajectories = []
                 y0_rewards = []
                 
-                for _ in range(self.config.group_size):
+                for _ in range(self.config.hyperparameters.group_size):
                     y0_list, _ = self.policy.generate([prompt])
                     y0 = y0_list[0]
                     
@@ -120,7 +120,7 @@ class Trainer:
                     loss = loss.view(shift_labels.size())
                     loss = (loss * shift_mask).sum() / (shift_mask.sum() + 1e-8)
                 else:
-                    loss = clipped_surrogate_loss(action_logprobs, shift_old_logprobs, adv_tensor, shift_mask)
+                    loss = clipped_surrogate_loss(action_logprobs, shift_old_logprobs, adv_tensor, shift_mask, self.config.hyperparameters.clip_ratio)
                 
                 total_loss += loss
             

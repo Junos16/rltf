@@ -1,0 +1,17 @@
+{
+    "num_iterations": 100,
+    "group_size": 8,
+    "vllm_batch_size": 4,
+    "learning_rate": 1e-5,
+    "max_tokens": 512,
+    "lora_rank": 16,
+    "lora_target_modules": [
+        "q_proj",
+        "v_proj"
+    ],
+    "rl_coef": 1.0,
+    "clip_ratio": 0.2,
+    "temperature": 1.0,
+    "top_p": 0.9,
+    "gpu_memory_utilization": 0.3
+}

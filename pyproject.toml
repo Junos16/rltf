@@ -15,9 +15,3 @@ dependencies = [
     "vllm>=0.5.0",
 ]
 
-[project.scripts]
-rltf = "src.main:main"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"

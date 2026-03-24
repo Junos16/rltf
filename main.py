@@ -1,7 +1,8 @@
 import argparse
 import logging
-from .config import ExperimentConfig
-from .trainer import Trainer
+import os
+from src.config import ExperimentConfig, Hyperparameters
+from src.trainer import Trainer
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -17,35 +18,27 @@ def main():
                         default="gsm8k", help="Task environment.")
     parser.add_argument("--algo", type=str, choices=["grpo", "rltf_sd", "rltf_fm"], 
                         default="rltf_sd", help="Alignment algorithm.")
-    parser.add_argument("--group_size", type=int, default=8, 
-                        help="Rollouts per prompt for GRPO advantage centering.")
-    parser.add_argument("--vllm_batch_size", type=int, default=4, 
-                        help="Prompts per iteration.")
-    parser.add_argument("--learning_rate", type=float, default=1e-5)
-    parser.add_argument("--lora_rank", type=int, default=16)
-    parser.add_argument("--rl_coef", type=float, default=1.0)
-    parser.add_argument("--num_iterations", type=int, default=100)
-    parser.add_argument("--max_tokens", type=int, default=512)
     parser.add_argument("--log_dir", type=str, default="./logs")
+    parser.add_argument("--config_file", type=str, default="hyperparams.json", 
+                        help="Path to the JSON hyperparameters configuration file.")
     
     args = parser.parse_args()
     
+    if not os.path.exists(args.config_file):
+        raise FileNotFoundError(f"Configuration file not found: {args.config_file}. Please create one with hyperparameters.")
+    
+    hyperparams = Hyperparameters.from_json(args.config_file)
+    
     logger.info(f"Model: {args.model_name} | Judge: {args.judge_model}")
-    logger.info(f"Env: {args.env} | Algo: {args.algo} | Iterations: {args.num_iterations}")
+    logger.info(f"Env: {args.env} | Algo: {args.algo} | Config: {args.config_file}")
     
     config = ExperimentConfig(
         model_name=args.model_name,
         judge_model=args.judge_model,
         env=args.env,
         algo=args.algo,
-        group_size=args.group_size,
-        vllm_batch_size=args.vllm_batch_size,
-        learning_rate=args.learning_rate,
-        lora_rank=args.lora_rank,
-        rl_coef=args.rl_coef,
         log_dir=args.log_dir,
-        num_iterations=args.num_iterations,
-        max_tokens=args.max_tokens,
+        hyperparameters=hyperparams
     )
     
     trainer = Trainer(config)
