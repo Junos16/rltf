@@ -4,6 +4,7 @@ from peft import get_peft_model, LoraConfig
 from vllm import LLM, SamplingParams
 from typing import List, Tuple
 from .config import Hyperparameters
+from .utils import log_system_usage
 
 class PolicyModel:
     def __init__(self, model_name: str, hyperparams: Hyperparameters):

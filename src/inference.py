@@ -55,6 +55,7 @@ class InferenceEngine:
         print(f"User Prompt: {prompt}")
         responses = self._generate([prompt])
         print(f"Response: {responses[0]}")
+        return responses[0]
         
     def evaluate_env(self, num_samples: int = 10):
         print(f"Env: {self.config.env}")
@@ -91,3 +92,4 @@ class InferenceEngine:
                 
         avg_reward = total_reward / valid_samples if valid_samples > 0 else 0
         print(f"Average Reward over {valid_samples} samples: {avg_reward:.4f}")
+        return avg_reward

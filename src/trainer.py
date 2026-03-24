@@ -46,6 +46,8 @@ class Trainer:
         
     def train(self):
         # Train the model
+        losses = []
+        rewards = []
         for iteration in range(self.config.hyperparameters.num_iterations):
             print(f"--- Iteration {iteration} ---")
             
@@ -130,11 +132,18 @@ class Trainer:
             batch_loss.backward()
             self.optimizer.step()
             
-            print(f"Loss: {batch_loss.item():.4f}")
+            total_r0 = sum(sum(g.y0_rewards) for g in all_trajectory_groups)
+            count_r0 = sum(len(g.y0_rewards) for g in all_trajectory_groups)
+            avg_r0 = total_r0 / count_r0 if count_r0 > 0 else 0
+            rewards.append(avg_r0)
+            
+            print(f"Loss: {batch_loss.item():.4f} | Avg Reward: {avg_r0:.4f}")
+            losses.append(batch_loss.item())
 
         print("Training complete. Saving LoRA adapter...")
         os.makedirs(self.config.log_dir, exist_ok=True)
         self.policy.model.save_pretrained(self.config.log_dir)
         self.policy.tokenizer.save_pretrained(self.config.log_dir)
         print(f"LoRA adapter saved to {self.config.log_dir}")
+        return losses, rewards
         
