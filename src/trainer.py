@@ -92,14 +92,18 @@ class Trainer:
             
             advantages = compute_advantages(all_trajectory_groups, algo=self.config.algo)
             
-            total_loss = torch.tensor(0.0, device=self.device, requires_grad=True)
+            self.optimizer.zero_grad()
             self.policy.model.train() 
             
             flat_trajectories = [traj for group in all_trajectory_groups for traj in group.trajectories]
+            num_trajs = len(flat_trajectories)
+            total_loss_val = 0.0
             
             for traj, adv in zip(flat_trajectories, advantages):
                 if self.config.algo == 'rltf_sd':
                     data = apply_distillation_mask(traj, adv, self.policy.tokenizer)
+                elif self.config.algo == 'grpo':
+                    data = trajectory_to_data(traj, adv, self.policy.tokenizer, include_y0=True)
                 else:
                     data = trajectory_to_data(traj, adv, self.policy.tokenizer)
                 
@@ -142,21 +146,21 @@ class Trainer:
                     
                     loss = loss + self.config.sft_coef * fm_loss
                 
-                total_loss = total_loss + loss
+                # Gradient accumulation: backward per trajectory, divide by batch size
+                (loss / num_trajs).backward()
+                total_loss_val += loss.item()
             
-            self.optimizer.zero_grad()
-            batch_loss = total_loss / len(flat_trajectories)
-            batch_loss.backward()
             self.optimizer.step()
             self.policy.sync_weights()
             
+            avg_loss = total_loss_val / num_trajs
             total_r0 = sum(sum(g.y0_rewards) for g in all_trajectory_groups)
             count_r0 = sum(len(g.y0_rewards) for g in all_trajectory_groups)
             avg_r0 = total_r0 / count_r0 if count_r0 > 0 else 0
             rewards.append(avg_r0)
             
-            print(f"Loss: {batch_loss.item():.4f} | Avg Reward: {avg_r0:.4f}")
-            losses.append(batch_loss.item())
+            print(f"Loss: {avg_loss:.4f} | Avg Reward: {avg_r0:.4f}")
+            losses.append(avg_loss)
 
         print("Training complete. Saving LoRA adapter...")
         os.makedirs(self.config.log_dir, exist_ok=True)

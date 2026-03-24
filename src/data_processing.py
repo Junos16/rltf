@@ -8,7 +8,7 @@ def compute_advantages(trajectory_groups, algo: str = "grpo") -> List[torch.Tens
         advantages.extend(group.get_advantages(algo))
     return advantages
 
-def trajectory_to_data(trajectory, advantage: float, tokenizer, max_length: int = 1024) -> Dict[str, torch.Tensor]:
+def trajectory_to_data(trajectory, advantage: float, tokenizer, max_length: int = 1024, include_y0: bool = False) -> Dict[str, torch.Tensor]:
     # Convert trajectory to data for training
 
     prompt_text = trajectory.get_prompt()
@@ -25,12 +25,20 @@ def trajectory_to_data(trajectory, advantage: float, tokenizer, max_length: int 
     attention_mask = encoded["attention_mask"].squeeze(0)
     loss_mask = torch.zeros_like(input_ids, dtype=torch.float32)
     
-    context_ids = tokenizer(context_text, add_special_tokens=False)["input_ids"]
-    context_length = len(context_ids)
     sequence_length = attention_mask.sum().item()
     
-    if sequence_length > context_length:
-        loss_mask[context_length:sequence_length] = 1.0
+    if include_y0:
+        # Multi-turn GRPO: train on both y0 and y1 (mask only the prompt)
+        prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
+        prompt_length = len(prompt_ids)
+        if sequence_length > prompt_length:
+            loss_mask[prompt_length:sequence_length] = 1.0
+    else:
+        # Default: train only on y1 (mask prompt+y0+c0)
+        context_ids = tokenizer(context_text, add_special_tokens=False)["input_ids"]
+        context_length = len(context_ids)
+        if sequence_length > context_length:
+            loss_mask[context_length:sequence_length] = 1.0
     
     return {
         "input_ids": input_ids,
