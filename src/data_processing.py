@@ -28,11 +28,17 @@ def trajectory_to_data(trajectory, advantage: float, tokenizer, max_length: int 
     sequence_length = attention_mask.sum().item()
     
     if include_y0:
-        # Multi-turn GRPO: train on both y0 and y1 (mask only the prompt)
+        # Multi-turn GRPO: train on y0 and y1, mask out prompt and c0 (judge-generated)
         prompt_ids = tokenizer(prompt_text, add_special_tokens=False)["input_ids"]
         prompt_length = len(prompt_ids)
-        if sequence_length > prompt_length:
-            loss_mask[prompt_length:sequence_length] = 1.0
+        y0_ids = tokenizer(y0_text, add_special_tokens=False)["input_ids"]
+        y0_end = prompt_length + len(y0_ids)
+        c0_ids = tokenizer(c0_text, add_special_tokens=False)["input_ids"]
+        c0_end = y0_end + len(c0_ids)
+        if y0_end > prompt_length:
+            loss_mask[prompt_length:y0_end] = 1.0
+        if sequence_length > c0_end:
+            loss_mask[c0_end:sequence_length] = 1.0
     else:
         # Default: train only on y1 (mask prompt+y0+c0)
         context_ids = tokenizer(context_text, add_special_tokens=False)["input_ids"]
