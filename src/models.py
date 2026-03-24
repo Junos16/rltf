@@ -1,7 +1,10 @@
+import os
+import tempfile
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import get_peft_model, LoraConfig
 from vllm import LLM, SamplingParams
+from vllm.lora.request import LoRARequest
 from typing import List, Tuple
 from .config import Hyperparameters
 from .utils import log_system_usage
@@ -30,6 +33,8 @@ class PolicyModel:
         self.llm = LLM(
             model=model_name,
             tensor_parallel_size=1,
+            enable_lora=True,
+            max_lora_rank=hyperparams.lora_rank,
             dtype="bfloat16",
             max_model_len=hyperparams.max_tokens * 2,
             gpu_memory_utilization=hyperparams.gpu_memory_utilization,
@@ -41,17 +46,27 @@ class PolicyModel:
             max_tokens=hyperparams.max_tokens,
             ignore_eos=True,
             logprobs=1,
-        )        
+        )
+        self._lora_dir = tempfile.mkdtemp()
+        self._lora_request_id = 0
+
+    def sync_weights(self):
+        self.model.save_pretrained(self._lora_dir)
+        self.tokenizer.save_pretrained(self._lora_dir)
+        self._lora_request_id += 1
 
     def generate(self, prompts: List[str], max_tokens: int = 512) -> Tuple[List[str], torch.Tensor]:
-        # Returns a list of generated strings and optionally their logprobs
-        outputs = self.llm.generate(prompts, self.sampling_params)
+        lora_request = LoRARequest(
+            lora_name=f"adapter_{self._lora_request_id}",
+            lora_int_id=self._lora_request_id,
+            lora_path=self._lora_dir,
+        )
+        outputs = self.llm.generate(prompts, self.sampling_params, lora_request=lora_request)
         generated_texts = [output.outputs[0].text for output in outputs]
         logprobs = [output.outputs[0].logprobs for output in outputs]
         return generated_texts, logprobs
         
     def forward_train(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
-        # Returns logits of shape [batch_size, sequence_length, vocab_size]
         outputs = self.model(input_ids, attention_mask=attention_mask)
         return outputs.logits
 
@@ -78,9 +93,7 @@ class JudgeModel:
         if correctness_only and r0 is not None:
             return "Your previous answer was correct." if r0 > 0.0 else "Your previous answer was incorrect."
             
-        # Returns the critique string
         query = f"""You are given a question and your previous attempt below. Your task is provide a critique of the attempt.\n\n[Prompt]\n{prompt}\n[Attempt]\n{initial_answer}\nCritique: """
         outputs = self.llm.generate([query], self.sampling_params)
         critique = outputs[0].outputs[0].text
         return critique
-        

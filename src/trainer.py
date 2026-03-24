@@ -45,9 +45,9 @@ class Trainer:
         self.optimizer = AdamW(self.policy.model.parameters(), lr=self.config.hyperparameters.learning_rate)
         
     def train(self):
-        # Train the model
         losses = []
         rewards = []
+        self.policy.sync_weights()
         for iteration in range(self.config.hyperparameters.num_iterations):
             print(f"--- Iteration {iteration} ---")
             
@@ -131,6 +131,7 @@ class Trainer:
             batch_loss = total_loss / len(flat_trajectories)
             batch_loss.backward()
             self.optimizer.step()
+            self.policy.sync_weights()
             
             total_r0 = sum(sum(g.y0_rewards) for g in all_trajectory_groups)
             count_r0 = sum(len(g.y0_rewards) for g in all_trajectory_groups)
