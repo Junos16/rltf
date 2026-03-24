@@ -43,9 +43,7 @@ class Trainer:
         
         print("Initializing Models...")
         self.policy = PolicyModel(config.model_name, hyperparams=config.hyperparameters)
-        
-        if config.algo != "rltf_fm":
-            self.judge = JudgeModel(config.judge_model, hyperparams=config.hyperparameters)
+        self.judge = JudgeModel(config.judge_model, hyperparams=config.hyperparameters)
             
         self.optimizer = AdamW(self.policy.model.parameters(), lr=self.config.hyperparameters.learning_rate)
         
@@ -102,8 +100,6 @@ class Trainer:
             for traj, adv in zip(flat_trajectories, advantages):
                 if self.config.algo == 'rltf_sd':
                     data = apply_distillation_mask(traj, adv, self.policy.tokenizer)
-                elif self.config.algo == 'rltf_fm':
-                    data = create_feedback_modeling_target(traj, self.policy.tokenizer)
                 else:
                     data = trajectory_to_data(traj, adv, self.policy.tokenizer)
                 
@@ -123,16 +119,30 @@ class Trainer:
                 logprobs = F.log_softmax(shift_logits, dim=-1)
                 action_logprobs = torch.gather(logprobs, dim=-1, index=shift_labels.unsqueeze(-1)).squeeze(-1)
                 
-                if self.config.algo == 'rltf_fm':
-                    loss = F.cross_entropy(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1), reduction='none')
-                    loss = loss.view(shift_labels.size())
-                    loss = (loss * shift_mask).sum() / (shift_mask.sum() + 1e-8)
-                elif self.config.algo == 'rltf_sd':
+                if self.config.algo == 'rltf_sd':
                     loss = awr_loss(action_logprobs, adv_tensor, shift_mask)
                 else:
                     loss = clipped_surrogate_loss(action_logprobs, shift_old_logprobs, adv_tensor, shift_mask, self.config.hyperparameters.clip_ratio)
+
+                # RLTF-FM: add auxiliary SFT loss on critique prediction (Eq.10)
+                if self.config.algo == 'rltf_fm':
+                    fm_data = create_feedback_modeling_target(traj, self.policy.tokenizer)
+                    fm_input_ids = fm_data["input_ids"].unsqueeze(0).to(self.device)
+                    fm_attention_mask = fm_data["attention_mask"].unsqueeze(0).to(self.device)
+                    fm_mask = fm_data["loss_mask"].unsqueeze(0).to(self.device)
+                    
+                    fm_logits = self.policy.forward_train(fm_input_ids, fm_attention_mask)
+                    fm_shift_logits = fm_logits[..., :-1, :].contiguous()
+                    fm_shift_labels = fm_input_ids[..., 1:].contiguous()
+                    fm_shift_mask = fm_mask[..., 1:].contiguous()
+                    
+                    fm_loss = F.cross_entropy(fm_shift_logits.view(-1, fm_shift_logits.size(-1)), fm_shift_labels.view(-1), reduction='none')
+                    fm_loss = fm_loss.view(fm_shift_labels.size())
+                    fm_loss = (fm_loss * fm_shift_mask).sum() / (fm_shift_mask.sum() + 1e-8)
+                    
+                    loss = loss + self.config.sft_coef * fm_loss
                 
-                total_loss += loss
+                total_loss = total_loss + loss
             
             self.optimizer.zero_grad()
             batch_loss = total_loss / len(flat_trajectories)

@@ -36,4 +36,5 @@ class ExperimentConfig:
     log_dir: str
     hyperparameters: Hyperparameters
     use_correctness_only: bool = False
+    sft_coef: float = 0.1
 
