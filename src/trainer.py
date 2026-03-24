@@ -48,6 +48,7 @@ class Trainer:
         self.optimizer = AdamW(self.policy.model.parameters(), lr=self.config.hyperparameters.learning_rate)
         
     def train(self):
+        # Train the model
         losses = []
         rewards = []
         self.policy.sync_weights()

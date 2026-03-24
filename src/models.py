@@ -56,6 +56,7 @@ class PolicyModel:
         self._lora_request_id += 1
 
     def generate(self, prompts: List[str], max_tokens: int = 512) -> Tuple[List[str], torch.Tensor]:
+        # Returns a list of generated strings and their logprobs
         lora_request = LoRARequest(
             lora_name=f"adapter_{self._lora_request_id}",
             lora_int_id=self._lora_request_id,
@@ -67,6 +68,7 @@ class PolicyModel:
         return generated_texts, logprobs
         
     def forward_train(self, input_ids: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+        # Returns logits of shape [batch_size, sequence_length, vocab_size]
         outputs = self.model(input_ids, attention_mask=attention_mask)
         return outputs.logits
 
@@ -93,6 +95,7 @@ class JudgeModel:
         if correctness_only and r0 is not None:
             return "Your previous answer was correct." if r0 > 0.0 else "Your previous answer was incorrect."
             
+        # Returns the critique string
         query = f"""You are given a question and your previous attempt below. Your task is provide a critique of the attempt.\n\n[Prompt]\n{prompt}\n[Attempt]\n{initial_answer}\nCritique: """
         outputs = self.llm.generate([query], self.sampling_params)
         critique = outputs[0].outputs[0].text
