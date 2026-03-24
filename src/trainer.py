@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn.functional as F
 from torch.optim import AdamW
@@ -130,3 +131,10 @@ class Trainer:
             self.optimizer.step()
             
             print(f"Loss: {batch_loss.item():.4f}")
+
+        print("Training complete. Saving LoRA adapter...")
+        os.makedirs(self.config.log_dir, exist_ok=True)
+        self.policy.model.save_pretrained(self.config.log_dir)
+        self.policy.tokenizer.save_pretrained(self.config.log_dir)
+        print(f"LoRA adapter saved to {self.config.log_dir}")
+        

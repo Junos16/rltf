@@ -1,5 +1,5 @@
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import get_peft_model, LoraConfig
 from vllm import LLM, SamplingParams
 from typing import List, Tuple
@@ -9,7 +9,19 @@ class PolicyModel:
     def __init__(self, model_name: str, hyperparams: Hyperparameters):
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.tokenizer.pad_token = self.tokenizer.eos_token
-        self.model = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype=torch.bfloat16, device_map="cuda")
+        
+        quant_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+        )
+        
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name, 
+            quantization_config=quant_config, 
+            device_map="cuda"
+        )
         self.peft_config = LoraConfig(r=hyperparams.lora_rank, target_modules=hyperparams.lora_target_modules)
         self.model = get_peft_model(self.model, self.peft_config)
         self.model.config.use_cache = False
