@@ -18,7 +18,7 @@ class BaseEnv:
         pass
 
 class DummyEnv(BaseEnv):
-    def __init__(self):
+    def __init__(self, split: str = "train"):
         pass
 
     def generate_prompts(self, batch_size: int) -> List[Dict[str, Any]]:

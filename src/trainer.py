@@ -17,14 +17,14 @@ def clipped_surrogate_loss(logprobs, old_logprobs, advantages, mask, clip_ratio:
     loss = (token_losses * mask).sum() / (mask.sum() + 1e-8)
     return loss
 
-def get_env(env_name: str):
+def get_env(env_name: str, split: str = "train"):
     # Get the environment
     if env_name == "dummy":
-        return DummyEnv()
+        return DummyEnv(split=split)
     elif env_name == "gsm8k":
-        return GSM8KEnv()
+        return GSM8KEnv(split=split)
     elif env_name == "math500":
-        return MATH500Env()
+        return MATH500Env(split=split)
     else:
         raise ValueError(f"Unknown env: {env_name}")
 
@@ -33,8 +33,8 @@ class Trainer:
         self.config = config
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        print("Initializing Environment...")
-        self.env = get_env(self.config.env)
+        print(f"Initializing Environment ({self.config.env}, split=train)...")
+        self.env = get_env(self.config.env, split="train")
         
         print("Initializing Models...")
         self.policy = PolicyModel(config.model_name, hyperparams=config.hyperparameters)

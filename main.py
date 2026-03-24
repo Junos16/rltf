@@ -10,27 +10,34 @@ logger = logging.getLogger(__name__)
 
 def main():
     parser = argparse.ArgumentParser(description="RLTF: Reinforcement Learning from Text Feedback")
+    subparsers = parser.add_subparsers(dest="action", required=True, help="Action command: train or eval")
     
-    parser.add_argument("--action", type=str, choices=["train", "eval"], default="train",
-                        help="Action to perform: run training or evaluate a saved model.")
-    parser.add_argument("--adapter_path", type=str, default=None,
-                        help="Path to saved LoRA adapter weights (for eval).")
-    parser.add_argument("--prompt", type=str, default=None,
-                        help="User input prompt to generate a response for (for eval).")
-    parser.add_argument("--num_samples", type=int, default=10,
-                        help="Number of environment samples to evaluate (for eval).")
+    # --- Train Subparser ---
+    train_parser = subparsers.add_parser("train", help="Run the RLTF alignment loop")
+    train_parser.add_argument("--model_name", type=str, default="meta-llama/Llama-3.1-8B-Instruct", 
+                              help="HuggingFace base model.")
+    train_parser.add_argument("--judge_model", type=str, default="meta-llama/Llama-3.1-8B-Instruct", 
+                              help="Model used for generating critiques.")
+    train_parser.add_argument("--env", type=str, choices=["dummy", "gsm8k", "math500"], 
+                              default="gsm8k", help="Task environment.")
+    train_parser.add_argument("--algo", type=str, choices=["grpo", "rltf_sd", "rltf_fm"], 
+                              default="rltf_sd", help="Alignment algorithm.")
+    train_parser.add_argument("--log_dir", type=str, default="./logs")
+    train_parser.add_argument("--config_file", type=str, default="hyperparams.json")
     
-    parser.add_argument("--model_name", type=str, default="meta-llama/Llama-3.1-8B-Instruct", 
-                        help="HuggingFace model to align.")
-    parser.add_argument("--judge_model", type=str, default="meta-llama/Llama-3.1-8B-Instruct", 
-                        help="Model used for generating critiques.")
-    parser.add_argument("--env", type=str, choices=["dummy", "gsm8k", "math500"], 
-                        default="gsm8k", help="Task environment.")
-    parser.add_argument("--algo", type=str, choices=["grpo", "rltf_sd", "rltf_fm"], 
-                        default="rltf_sd", help="Alignment algorithm.")
-    parser.add_argument("--log_dir", type=str, default="./logs")
-    parser.add_argument("--config_file", type=str, default="hyperparams.json", 
-                        help="Path to the JSON hyperparameters configuration file.")
+    # --- Eval Subparser ---
+    eval_parser = subparsers.add_parser("eval", help="Evaluate a base or trained model natively")
+    eval_parser.add_argument("--model_name", type=str, default="meta-llama/Llama-3.1-8B-Instruct", 
+                             help="HuggingFace base model.")
+    eval_parser.add_argument("--env", type=str, choices=["dummy", "gsm8k", "math500"], 
+                             default="gsm8k", help="Task environment.")
+    eval_parser.add_argument("--adapter_path", type=str, default=None,
+                             help="Optional: Path to trained LoRA weights.")
+    eval_parser.add_argument("--prompt", type=str, default=None,
+                             help="Optional: Run inference interactively on a custom string.")
+    eval_parser.add_argument("--num_samples", type=int, default=10,
+                             help="Evaluation samples drawn from the test environment.")
+    eval_parser.add_argument("--config_file", type=str, default="hyperparams.json")
     
     args = parser.parse_args()
     
