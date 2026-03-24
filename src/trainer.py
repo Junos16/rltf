@@ -77,13 +77,12 @@ class Trainer:
                     
                     y1_list, logprobs_list = self.policy.generate([prompt + y0 + c0])
                     y1 = y1_list[0]
-                    dummy_logprobs_tensor = torch.zeros(1024, dtype=torch.float32) 
                     
                     reward = self.env.evaluate(y1, truth)
                     
                     t0 = Transition(observation=prompt, action=y0, action_logprobs=torch.tensor([0]), reward=r0)
                     t1 = Transition(observation=prompt+y0, action=c0, action_logprobs=torch.tensor([0]), reward=None)
-                    t2 = Transition(observation=prompt+y0+c0, action=y1, action_logprobs=dummy_logprobs_tensor, reward=reward)
+                    t2 = Transition(observation=prompt+y0+c0, action=y1, action_logprobs=torch.tensor([0]), reward=reward)
                     
                     traj = Trajectory(transitions=[t0, t1, t2])
                     trajectories.append(traj)
@@ -111,15 +110,21 @@ class Trainer:
                 input_ids = data["input_ids"].unsqueeze(0).to(self.device)
                 attention_mask = data["attention_mask"].unsqueeze(0).to(self.device)
                 mask = data["loss_mask"].unsqueeze(0).to(self.device)
-                old_logprobs = data["old_logprobs"].unsqueeze(0).to(self.device)
                 adv_tensor = data["advantages"].unsqueeze(0).to(self.device)
+                
+                # Compute true old_logprobs with frozen weights (no_grad)
+                with torch.no_grad():
+                    old_logits = self.policy.forward_train(input_ids, attention_mask)
+                    old_shift_logits = old_logits[..., :-1, :].contiguous()
+                    old_shift_labels = input_ids[..., 1:].contiguous()
+                    old_logprobs = F.log_softmax(old_shift_logits, dim=-1)
+                    old_action_logprobs = torch.gather(old_logprobs, dim=-1, index=old_shift_labels.unsqueeze(-1)).squeeze(-1)
                 
                 logits = self.policy.forward_train(input_ids, attention_mask)
                 
                 shift_logits = logits[..., :-1, :].contiguous()
                 shift_labels = input_ids[..., 1:].contiguous()
                 shift_mask = mask[..., 1:].contiguous()
-                shift_old_logprobs = old_logprobs[..., 1:shift_mask.shape[1]+1].contiguous() 
                 
                 logprobs = F.log_softmax(shift_logits, dim=-1)
                 action_logprobs = torch.gather(logprobs, dim=-1, index=shift_labels.unsqueeze(-1)).squeeze(-1)
@@ -127,7 +132,7 @@ class Trainer:
                 if self.config.algo == 'rltf_sd':
                     loss = awr_loss(action_logprobs, adv_tensor, shift_mask)
                 else:
-                    loss = clipped_surrogate_loss(action_logprobs, shift_old_logprobs, adv_tensor, shift_mask, self.config.hyperparameters.clip_ratio)
+                    loss = clipped_surrogate_loss(action_logprobs, old_action_logprobs, adv_tensor, shift_mask, self.config.hyperparameters.clip_ratio)
 
                 # RLTF-FM: add auxiliary SFT loss on critique prediction (Eq.10)
                 if self.config.algo == 'rltf_fm':
